@@ -1,0 +1,32 @@
+# Local dev stack: control plane + TURN relay.
+# Postgres/Redis join in Phase 3 when device enrollment and multi-instance signaling land.
+#   docker compose -f deploy/docker-compose.yml up --build
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.server
+    ports: ["8080:8080"]
+    environment:
+      RD_ICE_URLS: "stun:stun.l.google.com:19302,turn:localhost:3478"
+      RD_TURN_USERNAME: dev
+      RD_TURN_CREDENTIAL: dev-only-not-secret
+    restart: unless-stopped
+
+  turn:
+    image: coturn/coturn:4.6
+    # Host networking keeps relay port ranges simple in dev (Linux). On macOS Docker
+    # Desktop, P2P on a LAN usually succeeds without TURN anyway.
+    network_mode: host
+    command:
+      - -n
+      - --listening-port=3478
+      - --min-port=49160
+      - --max-port=49200
+      - --lt-cred-mech
+      - --user=dev:dev-only-not-secret
+      - --realm=remote-desk.local
+      - --no-cli
+      - --no-tls
+      - --no-dtls
+    restart: unless-stopped
