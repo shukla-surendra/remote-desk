@@ -10,6 +10,8 @@ architecture and roadmap.
 | `crates/agent` | Host agent (`rd-agent`) |
 | `web/` | Browser viewer (React + WebRTC) |
 | `deploy/` | Dockerfile, docker-compose dev stack (server + coturn) |
+| `packaging/macos/` | Info.plist + icon for `Remote Desk.app` |
+| `scripts/package-macos.sh` | Builds `dist/Remote Desk.app` and `dist/RemoteDesk-<ver>.dmg` |
 | `prototype/` | Original Python proof of concept (reference only) |
 
 ## Status
@@ -19,10 +21,35 @@ consent-gated sessions, WebRTC signaling relay, brute-force rate limiting, brows
 viewer. **Not yet:** screen capture/encoding and input injection in the agent (Phase 2),
 so a session currently connects and negotiates but shows no picture.
 
-## Run locally
+## macOS app (.dmg)
+
+    scripts/package-macos.sh        # universal arm64+x86_64; ARCH=native for host-only
+
+Produces `dist/RemoteDesk-<version>.dmg`. Pushing a `v*` tag builds the same dmg in
+GitHub Actions and attaches it to a Release.
+
+**Remote Desk.app** is a menu-bar app (no Dock icon). The menu shows the Device ID and
+one-time password (click to copy), connection status, *End Session*, *Set Unattended
+Password…* and *Open Web Viewer*. Incoming sessions trigger a native Allow/Deny dialog
+(denied after 30 s). By default the app also runs the signaling server + web viewer on
+port 8080, so a single Mac is self-contained: from another machine open
+`http://<this-mac>:8080` (e.g. its Tailscale IP). macOS asks once to allow incoming
+connections. To use a separate control plane instead, add
+`"server_url": "wss://your-server"` to
+`~/Library/Application Support/remote-desk/agent.json` (or `"server_bind"` to change
+the port). Logs: `~/Library/Logs/Remote Desk/agent.log`.
+
+**First launch on another Mac:** the build is ad-hoc signed, not notarized, so Gatekeeper
+blocks it. Open it once, then go to System Settings → Privacy & Security → *Open Anyway*
+(or run `xattr -dr com.apple.quarantine "/Applications/Remote Desk.app"`). Setting
+`SIGN_IDENTITY` / `NOTARY_PROFILE` when packaging produces a signed, notarized dmg that
+opens without this step.
+
+## Run locally (development)
 
     cargo run -p remote-desk-server                      # :8080
     cargo run -p remote-desk-agent                       # prints Device ID + one-time password
+    # or both in one process: cargo run -p remote-desk-agent -- --with-server --web-dir web/dist
     cd web && npm install && npm run dev                 # viewer at http://localhost:5173
 
 Or serve the built viewer from the server: `npm run build` in `web/`, then
